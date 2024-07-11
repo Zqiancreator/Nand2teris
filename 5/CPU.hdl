@@ -1,0 +1,79 @@
+// This file is part of www.nand2tetris.org
+// and the book "The Elements of Computing Systems"
+// by Nisan and Schocken, MIT Press.
+// File name: projects/5/CPU.hdl
+/**
+ * The Hack Central Processing unit (CPU).
+ * Parses the binary code in the instruction input and executes it according to the
+ * Hack machine language specification. In the case of a C-instruction, computes the
+ * function specified by the instruction. If the instruction specifies to read a memory
+ * value, the inM input is expected to contain this value. If the instruction specifies
+ * to write a value to the memory, sets the outM output to this value, sets the addressM
+ * output to the target address, and asserts the writeM output (when writeM = 0, any
+ * value may appear in outM).
+ * If the reset input is 0, computes the address of the next instruction and sets the
+ * pc output to that value. If the reset input is 1, sets pc to 0.
+ * Note: The outM and writeM outputs are combinational: they are affected by the
+ * instruction's execution during the current cycle. The addressM and pc outputs are
+ * clocked: although they are affected by the instruction's execution, they commit to
+ * their new values only in the next cycle.
+ */
+CHIP CPU {
+
+    IN  inM[16],         // M value input  (M = contents of RAM[A])	
+        instruction[16], // Instruction for execution				1(C)11 a(1 use memory at address A, else use A) cccccc d(A)d(D)d(M) j(lt)j(zero)j(gt)(000=not jump,111=JMP)
+						 //											0(A) 0..14=addressM
+        reset;           // Signals whether to re-start the current
+                         // program (reset==1) or continue executing
+                         // the current program (reset==0).
+
+    OUT outM[16],        // M value output
+        writeM,          // Write to M? 
+        addressM[15],    // Address in data memory (of M)
+        pc[15];          // address of next instruction
+
+    PARTS:
+	//// Replace this comment with your code.
+	//If A instruction (instruction[15] = 0) then send instruction to A register, else send ALUout
+	Mux16(a=instruction,b=ALUout,sel=instruction[15],out=AWrite);
+	
+    //load ALUout to regA (and addressM) if writeA (instruction[5]) or if isAinstruction (!instruction[15])
+	Not(in=instruction[15],out=isA);
+	Or(a=isA,b=instruction[5],out=loadA);
+	ARegister(in=AWrite,load=loadA,out=Aout,out[0..14]=addressM);
+	
+	//A instrction is over follow is C instruction
+    //if A/M (instruction[12]) = 1 use memory at address A, else use A
+	And(a=instruction[12],b=instruction[15],out=sel1);
+	Mux16(a=Aout,b=inM,sel=sel1,out=AorM);
+
+
+    //if writeD (instruction[4]) and isCinstruction(instruction[15]) write to D
+    And(a=instruction[4],b=instruction[15],out=DWrite);
+	DRegister(in=ALUout,load=DWrite,out=outD);
+	
+    //if writeM (instruction[3]) and isCinstruction (instruction[15]) write to M
+	And(a=instruction[3],b=instruction[15],out=writeM);
+	
+    //the 2 out assignments here are necessary as you cannot plug an output to this chip as in input to a sub-chip
+	And(a=instruction[15], b=instruction[11], out=zx);
+    And(a=instruction[15], b=instruction[10], out=nx);
+    And(a=instruction[15], b=instruction[9], out=zy);
+    And(a=instruction[15], b=instruction[8], out=ny);
+    And(a=instruction[15], b=instruction[7], out=f);
+    And(a=instruction[15], b=instruction[6], out=no);
+	ALU(x=outD, y=AorM, zx=zx, nx=nx, zy=zy, ny=ny, f=f, no=no, out=outM, out=ALUout, ng=ng, zr=zr);
+   
+    //if the jump instructions match any of the respective ALU flags then load
+    And(a = instruction[1], b = zr, out = zrjmp);
+    And(a = instruction[2], b = ng, out = ngjmp); 
+    Or(a = ng, b = zr, out = zrng);
+    Not(in = zrng, out = gr);
+    //if its not less than or zero, its greater than
+    And(a = instruction[0], b = gr, out = grjmp);
+    Or(a = ngjmp, b = zrjmp, out = somejmp); 
+    Or(a = somejmp, b = grjmp, out = jmp);
+    //if should jump (jmp) and isCinstruction(instruction[15]) jump    
+    And(a = jmp, b = instruction[15], out = willjmp);
+    PC(in = Aout, load = willjmp, inc = true, reset = reset, out[0..14] = pc);
+}

@@ -1,0 +1,88 @@
+// This file is part of www.nand2tetris.org
+// and the book "The Elements of Computing Systems"
+// by Nisan and Schocken, MIT Press.
+// File name: projects/12/Memory.jack
+/**
+ * This library provides two services: direct access to the computer's main
+ * memory (RAM), and allocation and recycling of memory blocks. The Hack RAM
+ * consists of 32,768 words, each holding a 16-bit binary number.
+ */ 
+class Memory {
+    static Array memory;
+    static Array freeList;
+    static Array memoryBottom;
+
+    static int heapBottom;//16384
+    static int heapBase;//2048
+
+    static int LENGTH;//the segment's length
+    static int NEXT;//pointer to the NEXT segment in the list
+
+    static int ALLOC_LENGTH; //the alloc block's length
+    /** Initializes the class. */
+    function void init() {
+		let heapBase = 2048;
+        let heapBottom = 16384;
+
+        let memory = 0;//memory base
+		let memoryBottom = 24576;
+        let freeList = heapBase;//heap base
+        let LENGTH = 0;
+        let NEXT = 1;
+        let freeList[LENGTH] = heapBottom - heapBase;//which is 16384 - 2048
+        let freeList[NEXT] = null; 
+
+        let ALLOC_LENGTH = -1;//block[-1] store the length of alloc block
+
+        return;
+    }
+
+    /** Returns the RAM value at the given address. */
+    function int peek(int address) {
+		return memory[address];
+    }
+
+    /** Sets the RAM value at the given address to the given value. */
+    function void poke(int address, int value) {
+		let memory[address] = value;
+		return;
+    }
+
+    /** Finds an available RAM block of the given size and returns
+     *  a reference to its base address. */
+    function int alloc(int size) {
+		var Array tem;
+		var Array allocBlock;
+		let tem = freeList;
+		while(tem[LENGTH] < (size + 2)){
+			let tem = tem[NEXT];
+		}
+		let allocBlock = tem + tem[LENGTH] - size;
+		let allocBlock[LENGTH] = size;
+		let tem[LENGTH] = tem[LENGTH] - size;
+		
+		return allocBlock;
+    }
+
+    /** De-allocates the given object (cast as an array) by making
+     *  it available for future allocations. */
+    function void deAlloc(Array o) {
+		var Array tem, nextNode;
+		let tem = freeList;
+		while((tem[NEXT] < o)&~(tem[NEXT] = null)){
+			let tem = tem[NEXT];
+		}
+		if(tem + tem[LENGTH] = o){
+			let tem[LENGTH] = tem[LENGTH] + o[LENGTH] + 2;
+			while(tem + tem[LENGTH] = tem[NEXT]){
+				let nextNode = tem[NEXT];
+				let tem[LENGTH] = tem[LENGTH] + nextNode[LENGTH] + 2; 
+				let tem[NEXT] = nextNode[NEXT];
+			}
+		}else{
+			let o[NEXT] = tem[NEXT];
+			let tem[NEXT] = o;
+		}
+		return;
+    }    
+}
